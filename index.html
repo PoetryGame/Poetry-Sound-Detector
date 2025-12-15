@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国新诗声音检测器 v3.0</title>
+    <script src="https://unpkg.com/pinyin-pro"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #333;
+            --bg-color: #f0f2f5;
+            --red-highlight: #ff9999;    
+            --green-highlight: #a8e6cf; 
+            --yellow-highlight: #ffebb5;
+            --blue-selection: #e6f4ff; 
+            --card-shadow: 0 3px 10px rgba(0,0,0,0.06);
+            --btn-tone-dark: #e66767; 
+            --btn-initial-dark: #169e7f;
+            --btn-final-dark: #e09f2d;
+            --btn-group-dark: #7c5c93; 
+            --btn-char-dark: #4a90e2;   
+            --btn-noline-dark: #4b6584; 
+            --btn-clear-dark: #64748b; 
+        }
+
+        body {
+            font-family: "PingFang SC", "Microsoft Yahei", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            padding: 15px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 95%;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+        }
+
+        h1 { 
+            text-align: center; 
+            margin-bottom: 18px; 
+            font-weight: bold;
+            letter-spacing: 1px;
+            font-size: 26px;
+        }
+
+        .author-info {
+            text-align: center;
+            color: #888;
+            font-size: 11px;
+            margin-top: 25px; 
+            margin-bottom: 35px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 140px;
+            padding: 12px;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            resize: vertical;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #4a90e2;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        button:active { transform: scale(0.98); }
+        button:hover { opacity: 0.9; }
+
+        #btn-tone { background-color: var(--btn-tone-dark); }
+        #btn-initial { background-color: var(--btn-initial-dark); }
+        #btn-final { background-color: var(--btn-final-dark); color: white; } 
+        #btn-group { background-color: var(--btn-group-dark); } 
+        #btn-char { background-color: var(--btn-char-dark); } 
+        #btn-noline { background-color: var(--btn-noline-dark); }
+        #btn-clear { background-color: var(--btn-clear-dark); } 
+
+        /* --- 布局样式 --- */
+        #chart-section {
+            width: 100%;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed #eee;
+            display: none; 
+        }
+
+        #waveform-container {
+            width: 100%;
+            height: 240px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            box-sizing: border-box;
+            overflow: hidden; 
+            display: flex; 
+            align-items: center;
+        }
+        
+        #waveform-inner-wrapper {
+            width: 100% !important; 
+            height: 100%;
+            position: relative;
+        }
+
+        .output-wrapper {
+            display: flex;
+            gap: 25px;
+            padding-top: 10px;
+            align-items: flex-start;
+        }
+
+        #result-box {
+            flex: 1; 
+            font-size: 16px;
+            line-height: 2.2;
+            text-align: justify;
+            min-height: 80px;
+        }
+
+        #stats-box {
+            width: 500px; 
+            flex-shrink: 0;
+            display: none;
+            border-left: 1px solid #eee; 
+            padding-left: 20px;
+        }
+
+        @media (max-width: 960px) {
+            .output-wrapper { flex-direction: column; }
+            #stats-box {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid #eee;
+                padding-left: 0;
+                padding-top: 20px;
+                margin-top: 20px;
+            }
+        }
+
+        ruby { 
+            margin: 0 1px; 
+            cursor: default; 
+            border-radius: 4px; 
+            padding: 0 0; 
+            line-height: 1.0; 
+            display: inline-flex; 
+            flex-direction: column-reverse; 
+            align-items: center; 
+            vertical-align: middle; 
+            transition: all 0.2s ease; 
+        }
+        
+        rt { font-size: 10px; color: #888; font-weight: normal; line-height: 1; margin: 0; }
+
+        .hl-tone { background-color: var(--red-highlight); }
+        .hl-initial { background-color: var(--green-highlight); }
+        .hl-final { background-color: var(--yellow-highlight); box-shadow: 0 1px 0 rgba(0,0,0,0.05);}
+        
+        .hl-focus { 
+            font-weight: 900 !important; 
+            transform: scale(1.15); 
+            color: #000;
+            text-shadow: 0 0 1px rgba(0,0,0,0.1);
+            z-index: 1;
+            position: relative;
+        }
+
+        .stats-title { font-size: 15px; font-weight: bold; margin-bottom: 0px; color: #444; }
+        .stats-hint { font-size: 12px; color: #888; margin-bottom: 10px; text-align: left; }
+        .export-hint {
+            font-size: 12px; color: #4a90e2; cursor: pointer;
+            margin-top: 5px; margin-bottom: 5px; text-align: left; text-decoration: underline;
+        }
+        .export-hint:hover { color: #357ae8; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #eee; padding: 8px; text-align: center; }
+        th { background-color: #f9f9f9; color: #666; font-weight: 600; cursor: pointer; user-select: none; }
+        tr:nth-child(even) { background-color: #fcfcfc; }
+        tr.clickable-row { cursor: pointer; transition: background-color 0.1s; }
+        tr.clickable-row:hover { background-color: #f0f9ff; }
+        tr.selected-row { background-color: var(--blue-selection) !important; font-weight: bold; color: var(--btn-char-dark); }
+
+        .analysis-box {
+            background-color: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        .analysis-title {
+            font-weight: bold; color: #333; margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .analysis-row { display: flex; align-items: center; margin-bottom: 6px; font-size: 12px; color: #555; }
+        .analysis-label { width: 90px; flex-shrink: 0; }
+        .progress-bg { flex: 1; height: 8px; background-color: #eee; border-radius: 4px; margin: 0 8px; overflow: hidden; }
+        .progress-bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        .analysis-desc {
+            font-size: 11px; color: #777; margin-top: 8px; line-height: 1.4;
+            font-style: italic; border-top: 1px dotted #ddd; padding-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>中国新诗声音检测器</h1>
+    <div class="author-info">制作：曹僧+Gemini，2025.12.14 v3.0</div> 
+    
+    <textarea id="input-text" placeholder="请在此输入或粘贴您的诗歌文本..."></textarea>
+    
+    <div class="controls">
+        <button id="btn-tone" onclick="runDetection('tone')">语流波形</button>
+        <button id="btn-initial" onclick="runDetection('initial')">声母 (双声)</button>
+        <button id="btn-final" onclick="runDetection('final')">韵母 (叠韵)</button>
+        <button id="btn-char" onclick="runDetection('char')">用字统计</button> 
+        <button id="btn-group" onclick="runDetection('group')">重复字组</button> 
+        <button id="btn-noline" onclick="runDetection('noline')">清除分行</button>
+        <button id="btn-clear" onclick="clearText()">清空</button>
+    </div>
+
+    <div id="chart-section">
+        <div class="analysis-title">动态语流波形图 (Dynamic Sonic Flow)</div>
+        <div id="waveform-container">
+            <div id="waveform-inner-wrapper">
+                <canvas id="sonicWaveChart"></canvas>
+            </div>
+        </div>
+        <div style="font-size:11px; color:#888; margin-top:12px; margin-bottom:5px; line-height: 1.6; background: #fafafa; padding: 10px; border-radius: 6px;">
+            <strong>算法逻辑核心原则：</strong><br>
+            1. <strong>结构分层（空间即沉默）：</strong> 波谷深度由停顿强度决定。<strong>换行 > 强停顿 > 弱停顿</strong>。换行代表绝对的静默，且具有“吞噬性”，会覆盖行尾标点的声响。<br>
+            2. <strong>字音张力（发音即能量）：</strong> 波峰高度由字音物理属性决定。综合计算<strong>声母硬度</strong>、<strong>韵母开合</strong>及<strong>声调势能</strong>（去声最强）。鼻音与洪亮韵母会获得额外的<strong>共鸣加成</strong>。<br>
+            3. <strong>语流惯性（时间即连贯）：</strong> 曲线形态由前后关系决定。引入<strong>平滑算法</strong>，前字的余音会以 15% 的权重保留至后字，模拟声音粘连感；唯有<strong>换行</strong>会强制切断此惯性，使新句独立起势。
+        </div>
+    </div>
+
+    <div class="output-wrapper">
+        <div id="result-box"></div>
+        
+        <div id="stats-box">
+            <div id="stats-table-container"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { pinyin } = pinyinPro;
+    const inputText = document.getElementById('input-text');
+    const resultBox = document.getElementById('result-box');
+    const statsBox = document.getElementById('stats-box');
+    const chartSection = document.getElementById('chart-section'); 
+    const statsTableContainer = document.getElementById('stats-table-container'); 
+    
+    let waveChart = null; 
+
+    // 统计数据全局变量
+    let currentInitialStats = []; 
+    let currentSortColumn = 'frequency'; 
+    let currentSortDirection = -1; 
+    let currentFinalStats = [];
+    let currentFinalSortColumn = 'frequency'; 
+    let currentFinalSortDirection = -1; 
+    let currentGroupStats = [];
+    let currentGroupSortColumn = 'frequency'; 
+    let currentGroupSortDirection = -1; 
+    let currentCharStats = []; 
+    let currentCharSortColumn = 'frequency'; 
+    let currentCharSortDirection = -1; 
+
+    // 映射表配置 (省略，保持不变)
+    const initialMethodMap = { 'b': '塞音', 'p': '塞音', 'd': '塞音', 't': '塞音', 'g': '塞音', 'k': '塞音', 'j': '塞擦音', 'q': '塞擦音', 'zh': '塞擦音', 'ch': '塞擦音', 'z': '塞擦音', 'c': '塞擦音', 'f': '擦音', 'h': '擦音', 'x': '擦音', 'sh': '擦音', 's': '擦音', 'r': '擦音', 'm': '鼻音', 'n': '鼻音', 'l': '边音', 'y': '隔音字母', 'w': '隔音字母', '无': '零声母' };
+    const initialTextureMap = { 'b': 'hard', 'p': 'hard', 'd': 'hard', 't': 'hard', 'g': 'hard', 'k': 'hard', 'f': 'rough', 'h': 'rough', 'x': 'rough', 's': 'rough', 'sh': 'rough', 'r': 'rough', 'z': 'tough', 'c': 'tough', 'zh': 'tough', 'ch': 'tough', 'j': 'tough', 'q': 'tough', 'm': 'soft', 'n': 'soft', 'l': 'soft', 'y': 'void', 'w': 'void', '无': 'void' };
+    const textureInfo = { 'hard': { name: '爆破/硬', color: '#e74c3c', desc: '打击、阻断、力量感' }, 'rough': { name: '摩擦/糙', color: '#e67e22', desc: '沙砾、风声、流逝感' }, 'tough': { name: '咬合/韧', color: '#8e44ad', desc: '纠缠、撕裂、咀嚼感' }, 'soft': { name: '流音/软', color: '#2ecc71', desc: '流淌、液体、抚慰感' }, 'void': { name: '零声母/空', color: '#95a5a6', desc: '空气、无防御、直接' } };
+    const finalMoodMap = { 'open': ['a', 'ia', 'ua', 'ai', 'uai', 'ao', 'iao', 'an', 'ian', 'uan', 'ang', 'iang', 'uang'], 'sharp': ['i', 'ie', 'ei', 'ui', 'in', 'ing'], 'deep': ['u', 'uo', 'o', 'ou', 'iu', 'un', 'ong', 'iong'], 'round': ['e', 'en', 'eng', 'er'], 'constricted': ['ü', 'ue', 'üe', 'ün', 'üan', 'v', 've'] };
+    const moodInfo = { 'open': { name: '高亮/开放', color: '#e74c3c', desc: '开口度大，音色洪亮、热烈 (a系)' }, 'sharp': { name: '尖锐/齐齿', color: '#bdc3c7', desc: '唇形扁平，音色尖细、冷峻 (i系)' }, 'deep': { name: '深沉/合口', color: '#2c3e50', desc: '唇形圆敛，音色幽暗、厚重 (u/o系)' }, 'round': { name: '中性/柔和', color: '#f1c40f', desc: '开口适中，音色平稳、温润 (e系)' }, 'constricted': { name: '压抑/撮口', color: '#9b59b6', desc: '唇形撮圆，音色内卷、细腻 (ü系)' } };
+
+    function getSiHu(finalStr) {
+        if (!finalStr) return '开口呼';
+        if (finalStr.startsWith('i') || finalStr.startsWith('y')) return '齐齿呼';
+        if (finalStr.startsWith('u') || finalStr.startsWith('w')) return '合口呼';
+        if (finalStr.startsWith('ü') || finalStr.startsWith('v')) return '撮口呼';
+        return '开口呼'; 
+    }
+    function getTitleFromInput() {
+        const text = inputText.value.trim();
+        if (!text) return '无标题';
+        let firstLine = text.split('\n')[0].trim();
+        firstLine = firstLine.replace(/[\\/:*?"<>|]/g, '');
+        firstLine = firstLine.substring(0, 30);
+        return firstLine || '无标题';
+    }
+    function isChinese(char) { return /^[\u4e00-\u9fa5]$/.test(char); }
+    function isPunctuation(char) { return /[，。！？；：、""''（）《》,.!?;:()\[\]—…]/.test(char); }
+    function clearText() {
+        inputText.value = '';
+        resultBox.innerHTML = '';
+        statsBox.style.display = 'none';
+        chartSection.style.display = 'none'; 
+        if (waveChart) { waveChart.destroy(); waveChart = null; }
+        inputText.focus();
+    }
+    function getRhymeCore(finalStr) {
+        if (!finalStr) return '';
+        if (finalStr === 'ui') return 'ei';      
+        if (finalStr === 'iu') return 'ou';      
+        if (finalStr === 'un') return 'en';      
+        let core = finalStr;
+        if (core.length > 1) {
+            const firstChar = core[0];
+            if (['i', 'u', 'ü', 'v'].includes(firstChar)) { 
+                if (core === 'iong') return 'ong';
+                return core.substring(1).replace('v', 'ü');
+            }
+        }
+        return finalStr.replace('v', 'ü');
+    }
+
+    function exportTableToCSV(tableId, filename) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const rows = table.querySelectorAll('tr');
+        let csv = [];
+        for (let i = 0; i < rows.length; i++) {
+            let row = [], cols = rows[i].querySelectorAll('td, th');
+            for (let j = 0; j < cols.length; j++) {
+                let text = cols[j].innerText.trim();
+                text = text.replace(/[\s▲▼]/g, '');
+                text = `"${text.replace(/"/g, '""')}"`; 
+                row.push(text);
+            }
+            csv.push(row.join(','));
+        }
+        const csvString = csv.join('\n');
+        const blob = new Blob(['\ufeff', csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        if (link.download !== undefined) { 
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename.endsWith('.csv') ? filename : filename + '.csv'); 
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    function highlightGroup(groupString) {
+        const groupLength = groupString.length;
+        const rubies = resultBox.querySelectorAll('ruby'); 
+        for (let i = 0; i <= rubies.length - groupLength; i++) {
+            let match = true;
+            for (let j = 0; j < groupLength; j++) {
+                const rubyChar = rubies[i + j].dataset.char;
+                if (rubyChar !== groupString[j]) { match = false; break; }
+            }
+            if (match) {
+                for (let j = 0; j < groupLength; j++) { rubies[i + j].classList.add('hl-focus'); }
+            }
+        }
+    }
+    function handleHighlightClick(targetValue, rowElement, type) {
+        const rubies = resultBox.querySelectorAll('ruby');
+        rubies.forEach(r => r.classList.remove('hl-focus'));
+        const rows = statsBox.querySelectorAll('tr');
+        rows.forEach(r => r.classList.remove('selected-row'));
+        if (rowElement) { rowElement.classList.add('selected-row'); }
+        const targetStr = String(targetValue);
+        if (type === 'group') {
+            highlightGroup(targetStr);
+        } else if (type === 'final') {
+            rubies.forEach(r => { if (r.dataset.statVal === targetStr) r.classList.add('hl-focus'); });
+        } else {
+            rubies.forEach(r => { if (r.dataset.val === targetStr) r.classList.add('hl-focus'); });
+        }
+    }
+
+    window.onload = () => runDetection('initial');
+
+    function runDetection(type) {
+        let text = inputText.value; 
+        if (type === 'noline') { text = text.replace(/[\r\n]+/g, ''); type = 'char'; }
+        if (!text.trim()) {
+            resultBox.innerHTML = '';
+            statsBox.style.display = 'none';
+            chartSection.style.display = 'none';
+            if(waveChart) waveChart.destroy();
+            return;
+        }
+
+        // v4.1+ 控制图表显示
+        if (type === 'tone') {
+            chartSection.style.display = 'block';
+        } else {
+            chartSection.style.display = 'none';
+        }
+
+        const charArray = text.split('').map((char, index) => ({
+            char, index, 
+            isCN: isChinese(char),
+            isPunct: isPunctuation(char),
+            isNewline: char === '\n',
+            tone: '', initial: '', final: '',
+            displayVal: '', compareVal: '', statVal: '', methodVal: '', siHuVal: '',
+            highlightClass: '', sandhiTone: '' 
+        }));
+        
+        charArray.forEach(item => {
+            if (item.isCN) {
+                item.tone = pinyin(item.char, { pattern: 'num', type: 'array' })[0];
+                item.initial = pinyin(item.char, { pattern: 'initial', type: 'array' })[0] || '无';
+                let fin = pinyin(item.char, { pattern: 'final', toneType: 'none', type: 'array' })[0];
+                let ini = item.initial;
+                if (['j', 'q', 'x', 'y'].includes(ini) && fin.startsWith('u')) fin = 'ü' + fin.substring(1);
+                item.final = fin.replace('v', 'ü');
+                item.sandhiTone = item.tone; 
+            }
+        });
+
+        // 变调处理
+        for (let i = 0; i < charArray.length - 1; i++) {
+            const curr = charArray[i];
+            const next = charArray[i+1];
+            if (curr.isCN && next.isCN) {
+                if (curr.tone === '3' && next.tone === '3') { curr.sandhiTone = '2'; }
+                if (curr.char === '一') {
+                    if (next.tone === '4') { curr.sandhiTone = '2'; } 
+                    else if (['1', '2', '3'].includes(next.tone)) { curr.sandhiTone = '4'; }
+                }
+                if (curr.char === '不') {
+                    if (next.tone === '4') { curr.sandhiTone = '2'; }
+                }
+            }
+        }
+
+        // 数据填充
+        charArray.forEach(item => {
+            if (item.isCN) {
+                if (type === 'tone') {
+                    item.displayVal = item.tone; item.compareVal = item.tone; item.statVal = item.tone;
+                } else if (type === 'initial') {
+                    let val = item.initial === '' ? '无' : item.initial;
+                    item.displayVal = val; item.compareVal = val; item.statVal = val; item.methodVal = initialMethodMap[val] || '其他';
+                } else if (type === 'final') {
+                    const strictFinal = item.final;
+                    item.displayVal = strictFinal; item.statVal = strictFinal; item.compareVal = getRhymeCore(strictFinal); item.siHuVal = getSiHu(strictFinal); 
+                } else if (type === 'char') {
+                    item.displayVal = ''; item.compareVal = item.char; item.statVal = item.char;
+                }
+            }
+        });
+        
+        let groupStats = {};
+        if (type === 'group') {
+             const validChars = charArray.filter(c => c.isCN); 
+            const rawText = validChars.map(c => c.char).join('');
+            const rawTextLength = rawText.length;
+            let coveredIndices = new Set();
+            const lengths = [4, 3, 2];
+            const minRepeat = 2;
+            for (const len of lengths) {
+                let allGroups = {};
+                for (let i = 0; i <= rawTextLength - len; i++) {
+                    const group = rawText.substring(i, i + len);
+                    if (!allGroups[group]) allGroups[group] = [];
+                    allGroups[group].push(i);
+                }
+                for (const group in allGroups) {
+                    const allIndices = allGroups[group];
+                    let indicesNotOverlappingWithHigherL = [];
+                    for (const startIndex of allIndices) {
+                        let isHigherL_Overlapped = false;
+                        for (let k = 0; k < len; k++) {
+                            if (coveredIndices.has(startIndex + k)) { isHigherL_Overlapped = true; break; }
+                        }
+                        if (!isHigherL_Overlapped) indicesNotOverlappingWithHigherL.push(startIndex);
+                    }
+                    let nonOverlappingOccurrences = [];
+                    let group_localCovered = new Set();
+                    indicesNotOverlappingWithHigherL.sort((a, b) => a - b); 
+                    for (const startIndex of indicesNotOverlappingWithHigherL) {
+                        let isSelf_Overlapped = false;
+                        for (let k = 0; k < len; k++) {
+                            if (group_localCovered.has(startIndex + k)) { isSelf_Overlapped = true; break; }
+                        }
+                        if (!isSelf_Overlapped) {
+                            nonOverlappingOccurrences.push(startIndex);
+                            for (let k = 0; k < len; k++) group_localCovered.add(startIndex + k);
+                        }
+                    }
+                    if (nonOverlappingOccurrences.length >= minRepeat) {
+                        groupStats[group] = { count: nonOverlappingOccurrences.length, highlightKey: group };
+                        for (const startIndex of nonOverlappingOccurrences) {
+                            for (let k = 0; k < len; k++) coveredIndices.add(startIndex + k);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (type === 'tone') {
+            renderWaveform(charArray);
+        }
+
+        const validChars = charArray.filter(c => c.isCN); 
+        if (type === 'tone') {
+            for (let i = 0; i < validChars.length - 2; i++) {
+                const v1 = validChars[i].compareVal; const v2 = validChars[i+1].compareVal; const v3 = validChars[i+2].compareVal;
+                if (v1 && v1 !== '0' && v1 === v2 && v2 === v3) {
+                    validChars[i].highlightClass = 'hl-tone'; validChars[i+1].highlightClass = 'hl-tone'; validChars[i+2].highlightClass = 'hl-tone';
+                }
+            }
+        } else if (type === 'initial' || type === 'final') {
+            const hlClass = type === 'initial' ? 'hl-initial' : 'hl-final';
+            for (let i = 0; i < validChars.length - 1; i++) {
+                const c1 = validChars[i]; const c2 = validChars[i+1];
+                if (c1.compareVal && c1.compareVal !== '无') {
+                    let isMatch = (c1.compareVal === c2.compareVal);
+                    if (!isMatch && type === 'final') {
+                        const v1 = c1.compareVal; const v2 = c2.compareVal; 
+                        if (v1.endsWith('ng') && v2.endsWith('ng')) isMatch = true;
+                        else if (v1.endsWith('n') && v2.endsWith('n')) isMatch = true;
+                    }
+                    if (isMatch) { c1.highlightClass = hlClass; c2.highlightClass = hlClass; }
+                }
+            }
+        }
+
+        let html = '';
+        charArray.forEach(item => {
+            if (item.isCN) {
+                const cls = item.highlightClass ? `class="${item.highlightClass}"` : '';
+                const dataChar = `data-char="${item.char}"`; const dataVal = `data-val="${item.compareVal}"`; const dataStatVal = `data-stat-val="${item.statVal}"`;
+                html += `<ruby ${cls} ${dataChar} ${dataVal} ${dataStatVal}>${item.char}<rt>${item.displayVal}</rt></ruby>`;
+            } else {
+                html += item.char === '\n' ? '<br/>' : item.char;
+            }
+        });
+        resultBox.innerHTML = html;
+
+        const statsMap = {}; 
+        validChars.forEach(c => {
+            let statKey = c.statVal; let highlightKey = c.compareVal; 
+            if (statKey) { 
+                if (!statsMap[statKey]) {
+                    statsMap[statKey] = { count: 0, highlightKey: highlightKey }; 
+                    if (type === 'initial') statsMap[statKey].method = c.methodVal;
+                    if (type === 'final') statsMap[statKey].siHu = c.siHuVal;
+                }
+                statsMap[statKey].count++;
+            }
+        });
+        
+        statsBox.style.display = 'block';
+
+        if (type === 'initial') {
+            const total = Object.values(statsMap).reduce((sum, data) => sum + data.count, 0);
+            currentInitialStats = Object.entries(statsMap).map(([key, data]) => ({ key: key, val: data.count, highlightKey: data.highlightKey, method: data.method || '', frequency: total === 0 ? 0 : (data.count / total) }));
+            refreshInitialStatsTable(currentSortColumn, currentSortDirection);
+        } else if (type === 'final') {
+            const total = Object.values(statsMap).reduce((sum, data) => sum + data.count, 0);
+            currentFinalStats = Object.entries(statsMap).map(([key, data]) => ({ key: key, val: data.count, highlightKey: data.highlightKey, siHu: data.siHu || '', frequency: total === 0 ? 0 : (data.count / total) }));
+            refreshFinalStatsTable(currentFinalSortColumn, currentFinalSortDirection);
+        } else if (type === 'group') { 
+            const total = Object.values(groupStats).reduce((sum, data) => sum + data.count, 0);
+            currentGroupStats = Object.entries(groupStats).map(([key, data]) => ({ key: key, val: data.count, highlightKey: key, frequency: total === 0 ? 0 : (data.count / total) }));
+            refreshGroupStatsTable(currentGroupSortColumn, currentGroupSortDirection);
+        } else if (type === 'char') { 
+             const total = Object.values(statsMap).reduce((sum, data) => sum + data.count, 0);
+            currentCharStats = Object.entries(statsMap).map(([key, data]) => ({ key: key, val: data.count, highlightKey: key, frequency: total === 0 ? 0 : (data.count / total) }));
+            refreshCharStatsTable(currentCharSortColumn, currentCharSortDirection);
+        } else {
+            renderStats(statsMap, type, validChars);
+        }
+    }
+
+    // --- 核心算法 ---
+    function getResonanceFactor(fin) {
+        if (fin.endsWith('ng')) return 1.25;
+        if (fin.endsWith('n')) return 1.15;
+        if (['a', 'ia', 'ua', 'ai', 'uai', 'ao', 'iao', 'an', 'ian', 'uan', 'ang', 'iang', 'uang'].includes(fin)) return 1.1;
+        return 1.0;
+    }
+
+    const strongStopRegex = /[。！？!.?]/;
+    const weakStopRegex = /[，、；：,;:—…]/;
+
+    function calculatePhoneticTension(item) {
+        if (!item.isCN) return 0;
+        const ini = item.initial;
+        let iniScore = 40;
+        if (['q', 'ch', 'c'].includes(ini)) iniScore = 100; 
+        else if (['p', 't', 'k'].includes(ini)) iniScore = 95; 
+        else if (['z', 'j', 'zh', 's', 'x'].includes(ini)) iniScore = 85; 
+        else if (['b', 'd', 'g'].includes(ini)) iniScore = 75; 
+        else if (['f', 'h', 'sh', 'r'].includes(ini)) iniScore = 60; 
+        
+        const fin = item.final;
+        let finScore = 60;
+        if (['a', 'ia', 'ua', 'ai', 'uai', 'ao', 'iao', 'an', 'ian', 'uan', 'ang', 'iang', 'uang'].includes(fin)) finScore = 100;
+        else if (['o', 'uo', 'ou', 'ong', 'iong', 'e', 'en', 'eng', 'er', 'ei'].includes(fin)) finScore = 80;
+        else if (fin.startsWith('i') || fin.startsWith('ü')) finScore = 75; 
+        else if (fin.startsWith('u')) finScore = 50;
+        
+        if (fin.endsWith('ng')) finScore += 10;
+        else if (fin.endsWith('n')) finScore += 5;
+        if (fin.length > 1 && !fin.endsWith('n') && !fin.endsWith('g')) finScore += 5;
+        finScore = Math.min(finScore, 100);
+
+        const tone = item.sandhiTone;
+        const toneWeights = { '4': 100, '1': 80, '2': 60, '3': 10, '0': 5 };
+        const toneScore = toneWeights[tone] || 40;
+
+        let total = (iniScore * 0.25) + (finScore * 0.40) + (toneScore * 0.35);
+        const resonance = getResonanceFactor(fin);
+        total *= resonance;
+        if (tone === '0') total *= 0.4;
+        return total;
+    }
+
+    function renderWaveform(fullCharArray) {
+        if (!fullCharArray || fullCharArray.length === 0) return;
+
+        const ctx = document.getElementById('sonicWaveChart').getContext('2d');
+        const innerWrapper = document.getElementById('waveform-inner-wrapper');
+        
+        const renderList = fullCharArray.filter(c => c.isCN || c.isPunct || c.isNewline);
+        const labels = [];
+        const dataPoints = [];
+        let prevScore = 0; 
+
+        for (let i = 0; i < renderList.length; i++) {
+            const item = renderList[i];
+            const nextItem = renderList[i + 1];
+
+            // 吞噬规则
+            if (item.isPunct && nextItem && nextItem.isNewline) { continue; }
+
+            let score = 0;
+            let label = '';
+
+            if (item.isNewline) {
+                score = 0; label = '↵';
+                prevScore = 0; // 换行归零
+            } else if (item.isPunct) {
+                // v4.5 修改：锐化参数
+                if (strongStopRegex.test(item.char)) { score = 3; } else { score = 6; }
+                label = item.char;
+                prevScore = score; 
+            } else if (item.isCN) {
+                const rawScore = calculatePhoneticTension(item);
+                if (prevScore > 0) { score = rawScore * 0.85 + prevScore * 0.15; } else { score = rawScore; }
+                prevScore = score; label = item.char;
+            }
+            dataPoints.push(score); labels.push(label);
+        }
+
+        innerWrapper.style.width = '100%';
+
+        if (waveChart) waveChart.destroy();
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 240);
+        gradient.addColorStop(0, 'rgba(74, 144, 226, 0.7)'); 
+        gradient.addColorStop(1, 'rgba(74, 144, 226, 0.02)'); 
+
+        waveChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '声响张力',
+                    data: dataPoints,
+                    borderColor: '#4a90e2',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    pointRadius: (ctx) => {
+                        const val = ctx.dataset.data[ctx.dataIndex];
+                        if (val === 0) return 1; if (val <= 6) return 1.5; return 2.5;
+                    },
+                    pointHoverRadius: 6,
+                    fill: true,
+                    tension: 0.4, 
+                    segment: {
+                        borderColor: ctx => ctx.p0.parsed.y === 0 || ctx.p1.parsed.y === 0 ? 'rgba(74,144,226,0.3)' : '#4a90e2',
+                        borderDash: ctx => ctx.p0.parsed.y === 0 || ctx.p1.parsed.y === 0 ? [5, 5] : undefined
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false, 
+                scales: {
+                    x: { display: true, grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 10 } },
+                    y: { beginAtZero: true, max: 150, display: false, grid: { display: false } } 
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.chart.data.labels[context.dataIndex];
+                                const val = context.raw;
+                                if (label === '↵') return ' [换行/沉默]';
+                                if (val <= 3) return ' [强停顿]';
+                                if (val <= 6) return ' [弱停顿]';
+                                return ` 张力: ${val.toFixed(1)}`;
+                            }
+                        }
+                    }
+                },
+                interaction: { mode: 'index', intersect: false }
+            }
+        });
+    }
+
+    // --- 表格渲染 (保持不变) ---
+    function getConsonantAnalysisHTML(sortedData) {
+        let counts = { 'hard': 0, 'rough': 0, 'tough': 0, 'soft': 0, 'void': 0 }; let total = 0;
+        sortedData.forEach(item => { const type = initialTextureMap[item.key] || 'void'; counts[type] += item.val; total += item.val; });
+        if (total === 0) return '';
+        let html = `<div class="analysis-box"><div class="analysis-title">辅音质地分析 (身体姿态)</div>`;
+        let maxType = 'void'; let maxVal = -1;
+        for (let type in counts) { if (counts[type] > maxVal) { maxVal = counts[type]; maxType = type; }
+            const pct = (counts[type] / total * 100).toFixed(1); const info = textureInfo[type];
+            html += `<div class="analysis-row"><div class="analysis-label">${info.name}</div><div class="progress-bg"><div class="progress-bar" style="width:${pct}%; background:${info.color}"></div></div><div style="width:35px; text-align:right">${pct}%</div></div>`;
+        }
+        const domInfo = textureInfo[maxType];
+        html += `<div class="analysis-desc"><span style="color:${domInfo.color}; font-weight:bold">● 主导质感：${domInfo.name}</span><br>声音面相：${domInfo.desc}</div></div>`;
+        return html;
+    }
+    function getVowelAnalysisHTML(sortedData) {
+        let counts = { 'open': 0, 'sharp': 0, 'deep': 0, 'round': 0, 'constricted': 0 }; let total = 0;
+        sortedData.forEach(item => {
+            let type = 'round'; for (const [key, list] of Object.entries(finalMoodMap)) { if (list.includes(item.key)) { type = key; break; } }
+            if (!finalMoodMap['open'].includes(item.key) && !finalMoodMap['sharp'].includes(item.key)) {
+                if (item.key.includes('a')) type = 'open'; else if (item.key.includes('u') || item.key.includes('o')) type = 'deep'; else if (item.key.includes('i')) type = 'sharp';
+            }
+            counts[type] += item.val; total += item.val;
+        });
+        if (total === 0) return '';
+        let html = `<div class="analysis-box"><div class="analysis-title">元音色谱分析 (情感氛围)</div>`;
+        let maxType = 'round'; let maxVal = -1;
+        for (let type in counts) { if (counts[type] > maxVal) { maxVal = counts[type]; maxType = type; }
+            const pct = (counts[type] / total * 100).toFixed(1); const info = moodInfo[type];
+            html += `<div class="analysis-row"><div class="analysis-label">${info.name}</div><div class="progress-bg"><div class="progress-bar" style="width:${pct}%; background:${info.color}"></div></div><div style="width:35px; text-align:right">${pct}%</div></div>`;
+        }
+        const domInfo = moodInfo[maxType];
+        html += `<div class="analysis-desc"><span style="color:${domInfo.color}; font-weight:bold">● 主导色调：${domInfo.name}</span><br>声音面相：${domInfo.desc}</div></div>`;
+        return html;
+    }
+    function refreshInitialStatsTable(sortBy, sortDir) {
+        const data = currentInitialStats; currentSortColumn = sortBy; currentSortDirection = sortDir;
+        data.sort((a, b) => {
+            let valA, valB;
+            if (sortBy === 'val' || sortBy === 'frequency') { valA = sortBy === 'val' ? a.val : a.frequency; valB = sortBy === 'val' ? b.val : b.frequency; return sortDir * (valA - valB); } 
+            if (sortBy === 'method') { const methodOrder = ['塞音', '塞擦音', '擦音', '鼻音', '边音', '隔音字母', '零声母', '其他']; const indexA = methodOrder.indexOf(a.method); const indexB = methodOrder.indexOf(b.method); if (indexA !== indexB) return sortDir * (indexA - indexB); return a.key.localeCompare(b.key, 'zh-CN'); }
+            valA = a.key; valB = b.key; return sortDir * valA.localeCompare(valB, 'zh-CN');
+        });
+        _renderInitialTable(data);
+    }
+    function _renderInitialTable(sortedData) {
+        const labelName = '声母'; const total = sortedData.reduce((sum, data) => sum + data.val, 0); const tableId = 'initial-stats-table'; const filename = `${getTitleFromInput()}_${labelName}统计表`; 
+        const analysisHtml = getConsonantAnalysisHTML(sortedData); const getSortArrow = (column) => (currentSortColumn === column ? (currentSortDirection === 1 ? ' ▲' : ' ▼') : ''); const getNewDirection = (column) => (currentSortColumn === column ? -currentSortDirection : (column === 'method' ? 1 : -1));
+        let methodHeader = `<th onclick="refreshInitialStatsTable('method', ${getNewDirection('method')})">发音方法${getSortArrow('method')}</th>`; let keyHeader = `<th>${labelName}</th>`; let valHeader = `<th onclick="refreshInitialStatsTable('val', ${getNewDirection('val')})">次数${getSortArrow('val')}</th>`; let freqHeader = `<th onclick="refreshInitialStatsTable('frequency', ${getNewDirection('frequency')})">频率${getSortArrow('frequency')}</th>`;
+        let tableHtml = `${analysisHtml}<div class="stats-title">${labelName}统计表 (共 ${total} 个数据)</div><div class="export-hint" onclick="exportTableToCSV('${tableId}', '${filename}')">点击导出表格</div><div class="stats-hint">点击表格行，可在正文中加粗查看所有${labelName}。<br>点击表头可排序。</div><table id="${tableId}"><thead><tr>${methodHeader}${keyHeader}${valHeader}${freqHeader}</tr></thead><tbody>`;
+        sortedData.forEach(({ key, val, highlightKey, method, frequency }) => { const frequencyStr = (frequency * 100).toFixed(1); let clickHighlightKey = key; tableHtml += `<tr class="clickable-row" onclick="handleHighlightClick('${clickHighlightKey}', this, 'initial')"><td>${method}</td><td>${key}</td><td>${val}</td><td>${frequencyStr}%</td></tr>`; });
+        tableHtml += `</tbody></table>`; statsTableContainer.innerHTML = tableHtml;
+    }
+    function refreshFinalStatsTable(sortBy, sortDir) {
+        const data = currentFinalStats; currentFinalSortColumn = sortBy; currentFinalSortDirection = sortDir;
+        data.sort((a, b) => {
+            let valA, valB;
+            if (sortBy === 'val' || sortBy === 'frequency') { valA = sortBy === 'val' ? a.val : a.frequency; valB = sortBy === 'val' ? b.val : b.frequency; return sortDir * (valA - valB); } 
+            if (sortBy === 'siHu') { const siHuOrder = ['开口呼', '齐齿呼', '合口呼', '撮口呼', '其他']; const indexA = siHuOrder.indexOf(a.siHu); const indexB = siHuOrder.indexOf(b.siHu); if (indexA !== indexB) return sortDir * (indexA - indexB); return a.key.localeCompare(b.key, 'zh-CN'); }
+            valA = a.key; valB = b.key; return sortDir * valA.localeCompare(valB, 'zh-CN');
+        });
+        _renderFinalTable(data);
+    }
+    function _renderFinalTable(sortedData) {
+        const labelName = '韵母'; const total = sortedData.reduce((sum, data) => sum + data.val, 0); const tableId = 'final-stats-table'; const filename = `${getTitleFromInput()}_${labelName}统计表`;
+        const analysisHtml = getVowelAnalysisHTML(sortedData); const getSortArrow = (column) => (currentFinalSortColumn === column ? (currentFinalSortDirection === 1 ? ' ▲' : ' ▼') : ''); const getNewDirection = (column) => (currentFinalSortColumn === column ? -currentFinalSortDirection : (column === 'siHu' ? 1 : -1));
+        let siHuHeader = `<th onclick="refreshFinalStatsTable('siHu', ${getNewDirection('siHu')})">四呼${getSortArrow('siHu')}</th>`; let keyHeader = `<th>${labelName}</th>`; let valHeader = `<th onclick="refreshFinalStatsTable('val', ${getNewDirection('val')})">次数${getSortArrow('val')}</th>`; let freqHeader = `<th onclick="refreshFinalStatsTable('frequency', ${getNewDirection('frequency')})">频率${getSortArrow('frequency')}</th>`;
+        let tableHtml = `${analysisHtml}<div class="stats-title">${labelName}统计表 (共 ${total} 个数据)</div><div class="export-hint" onclick="exportTableToCSV('${tableId}', '${filename}')">点击导出表格</div><div class="stats-hint">点击表格行，可在正文中加粗查看所有${labelName}。<br>点击表头可排序。</div><table id="${tableId}"><thead><tr>${siHuHeader}${keyHeader}${valHeader}${freqHeader}</tr></thead><tbody>`;
+        sortedData.forEach(({ key, val, highlightKey, siHu, frequency }) => { const frequencyStr = (frequency * 100).toFixed(1); let clickHighlightKey = key; tableHtml += `<tr class="clickable-row" onclick="handleHighlightClick('${clickHighlightKey}', this, 'final')"><td>${siHu}</td><td>${key}</td><td>${val}</td><td>${frequencyStr}%</td></tr>`; });
+        tableHtml += `</tbody></table>`; statsTableContainer.innerHTML = tableHtml;
+    }
+    function refreshCharStatsTable(sortBy, sortDir) {
+        const data = currentCharStats; currentCharSortColumn = sortBy; currentCharSortDirection = sortDir;
+        data.sort((a, b) => {
+            let valA, valB; if (sortBy === 'val' || sortBy === 'frequency') { valA = sortBy === 'val' ? a.val : a.frequency; valB = sortBy === 'val' ? b.val : b.frequency; return sortDir * (valA - valB); } 
+            valA = a.key; valB = b.key; return sortDir * valA.localeCompare(valB, 'zh-CN');
+        });
+        _renderCharTable(data);
+    }
+    function _renderCharTable(sortedData) {
+        const labelName = '用字'; const total = sortedData.reduce((sum, data) => sum + data.val, 0); const tableId = 'char-stats-table'; const filename = `${getTitleFromInput()}_${labelName}统计表`;
+        const getSortArrow = (column) => (currentCharSortColumn === column ? (currentCharSortDirection === 1 ? ' ▲' : ' ▼') : ''); const getNewDirection = (column) => (currentCharSortColumn === column ? -currentSortDirection : (column === 'key' ? 1 : -1));
+        let keyHeader = `<th onclick="refreshCharStatsTable('key', ${getNewDirection('key')})">${labelName}${getSortArrow('key')}</th>`; let valHeader = `<th onclick="refreshCharStatsTable('val', ${getNewDirection('val')})">次数${getSortArrow('val')}</th>`; let freqHeader = `<th onclick="refreshCharStatsTable('frequency', ${getNewDirection('frequency')})">频率${getSortArrow('frequency')}</th>`;
+        let tableHtml = `<div class="stats-title">${labelName}统计表 (共 ${total} 个数据)</div><div class="export-hint" onclick="exportTableToCSV('${tableId}', '${filename}')">点击导出表格</div><div class="stats-hint">点击表格行，可在正文中加粗查看所有用字。<br>点击表头可排序。</div><table id="${tableId}"><thead><tr>${keyHeader}${valHeader}${freqHeader}</tr></thead><tbody>`;
+        sortedData.forEach(({ key, val, frequency }) => { const frequencyStr = (frequency * 100).toFixed(1); let clickHighlightKey = key; tableHtml += `<tr class="clickable-row" onclick="handleHighlightClick('${clickHighlightKey}', this, 'char')"><td>${key}</td><td>${val}</td><td>${frequencyStr}%</td></tr>`; });
+        tableHtml += `</tbody></table>`; statsTableContainer.innerHTML = tableHtml;
+    }
+    function refreshGroupStatsTable(sortBy, sortDir) {
+        const data = currentGroupStats; currentGroupSortColumn = sortBy; currentGroupSortDirection = sortDir;
+        data.sort((a, b) => {
+            let valA, valB; if (sortBy === 'val' || sortBy === 'frequency') { valA = sortBy === 'val' ? a.val : a.frequency; valB = sortBy === 'val' ? b.val : b.frequency; return sortDir * (valA - valB); } 
+            valA = a.key; valB = b.key; return sortDir * valA.localeCompare(valB, 'zh-CN');
+        });
+        _renderGroupTable(data);
+    }
+    function _renderGroupTable(sortedData) {
+        const labelName = '重复字组'; const total = sortedData.reduce((sum, data) => sum + data.val, 0); const tableId = 'group-stats-table'; const filename = `${getTitleFromInput()}_${labelName}统计表`;
+        const getSortArrow = (column) => (currentGroupSortColumn === column ? (currentGroupSortDirection === 1 ? ' ▲' : ' ▼') : ''); const getNewDirection = (column) => (currentGroupSortColumn === column ? -currentGroupSortDirection : (column === 'key' ? 1 : -1));
+        let keyHeader = `<th onclick="refreshGroupStatsTable('key', ${getNewDirection('key')})">${labelName}${getSortArrow('key')}</th>`; let valHeader = `<th onclick="refreshGroupStatsTable('val', ${getNewDirection('val')})">次数${getSortArrow('val')}</th>`; let freqHeader = `<th onclick="refreshGroupStatsTable('frequency', ${getNewDirection('frequency')})">频率${getSortArrow('frequency')}</th>`;
+        let tableHtml = `<div class="stats-title">${labelName}统计表 (共 ${total} 个字组)</div><div class="export-hint" onclick="exportTableToCSV('${tableId}', '${filename}')">点击导出表格</div><div class="stats-hint">点击表格行，可在正文中加粗查看所有字组。<br>点击表头可排序。</div><table id="${tableId}"><thead><tr>${keyHeader}${valHeader}${freqHeader}</tr></thead><tbody>`;
+        sortedData.forEach(({ key, val, frequency }) => { const frequencyStr = (frequency * 100).toFixed(1); let clickHighlightKey = key; tableHtml += `<tr class="clickable-row" onclick="handleHighlightClick('${clickHighlightKey}', this, 'group')"><td>${key}</td><td>${val}</td><td>${frequencyStr}%</td></tr>`; });
+        tableHtml += `</tbody></table>`; statsTableContainer.innerHTML = tableHtml;
+    }
+    function renderStats(statsMap, type, validChars) {
+        if (type !== 'tone') return; 
+        const toneMap = { '1': '一声', '2': '二声', '3': '三声', '4': '四声', '0': '轻声' }; const total = Object.values(statsMap).reduce((sum, data) => sum + data.count, 0); const toneOrder = ['1', '2', '3', '4', '0'];
+        const sorted = toneOrder.filter(key => statsMap[key]).map(key => ({ key, val: statsMap[key]?.count || 0, highlightKey: statsMap[key]?.highlightKey || key })).filter(item => item.val > 0);
+        const tableId = `${type}-stats-table`; const filename = `${getTitleFromInput()}_${type}统计表`;
+        let tableHtml = `<div class="stats-title">声调统计表 (共 ${total} 个数据)</div><div class="export-hint" onclick="exportTableToCSV('${tableId}', '${filename}')">点击导出表格</div><div class="stats-hint">点击表格行，可在正文中加粗查看所有声调。</div><table id="${tableId}"><thead><tr><th>声调</th><th>次数</th><th>频率</th></tr></thead><tbody>`;
+        sorted.forEach(({ key, val, highlightKey }) => { const displayName = toneMap[key] || key; const frequency = total === 0 ? 0 : ((val/total)*100).toFixed(1); let clickHighlightKey = highlightKey; tableHtml += `<tr class="clickable-row" onclick="handleHighlightClick('${clickHighlightKey}', this, '${type}')"><td>${displayName}</td><td>${val}</td><td>${frequency}%</td></tr>`; });
+        tableHtml += `</tbody></table>`; statsTableContainer.innerHTML = tableHtml;
+    }
+</script>
+
+</body>
+</html>
